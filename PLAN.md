@@ -25,7 +25,7 @@
 | Data | 100% on the phone. **No INTERNET permission.** |
 | Size target | Release APK **under 3 MB** |
 | Purpose of v1 | Awareness only. No blocking, no pause screen. |
-| Distribution | Personal use first; **Play Store later** (so keep the privacy disclosure, a real privacy policy and the Accessibility declaration in mind) |
+| Distribution | My own phone plus a few friends through an APK sent on WhatsApp (section 11b); **Play Store later** (so keep the privacy disclosure, a real privacy policy and the Accessibility declaration in mind) |
 | Test phone | Android 14 or newer, USB debugging to this PC: Claude installs the APK and reads Logcat itself |
 | Apps in v1 | Official `com.instagram.android` (Reels) and `com.google.android.youtube` (Shorts) only. More apps later by adding IDs to `CountingConfig.kt` |
 | Design source | Section 7 of this file only (no Figma or mockups) |
@@ -378,7 +378,7 @@ Tune using my test results and logs. Repeat until section 10 passes.
 
 **Phase 8 — Onboarding + Settings + limit notification**
 
-**Phase 9 — Polish + release check:** empty states, app icon (simple vector: mint hourglass or ↕ on dark), `./gradlew assembleRelease`, check APK size < 3 MB and no INTERNET permission (`aapt dump permissions` or check the merged manifest).
+**Phase 9 — Polish + release check:** empty states, app icon (simple vector: mint hourglass or ↕ on dark), `./gradlew assembleRelease`, check APK size < 3 MB and no INTERNET permission (`aapt dump permissions` or check the merged manifest). Then copy the release APK to `dist/Reclaim-<versionName>.apk`: this is the file I send to a friend on WhatsApp (section 11b).
 
 ---
 
@@ -414,6 +414,15 @@ Write down the results like: `IG test 3: expected 20, got 19` and send them with
 3. **Android 13+:** Settings → Apps → Reclaim → ⋮ (top right) → **Allow restricted settings**. Then Settings → Accessibility → Reclaim → ON.
 4. Xiaomi / Vivo / Oppo / Realme: Battery → Reclaim → **No restrictions**, and lock Reclaim in recent apps.
 5. Logs: `adb logcat -s ReclaimDbg`
+
+---
+
+## 11b. Sharing the APK with a friend (WhatsApp)
+- Send the **release** APK (`dist/Reclaim-<versionName>.apk`), not the debug one. It is small, and it has no debug inspector. A friend gets something useful only once counting works (after Stop 2).
+- It is signed with the debug key for now. That installs fine on any phone, but a later Play Store build must use a real key, and a friend would have to uninstall first.
+- If WhatsApp refuses a `.apk`, send it zipped, or share a Google Drive link.
+- Friend's phone: tap the file → allow "Install unknown apps" for WhatsApp or Files → install. On Android 13+: Settings → Apps → Reclaim → ⋮ → **Allow restricted settings**, then Settings → Accessibility → Reclaim → ON. On Xiaomi / Vivo / Oppo / Realme set battery to "No restrictions".
+- Their Instagram or YouTube version may use different view IDs, so counts can be off on their phone. If so, they tell me their phone model and app versions, and I add the IDs to `CountingConfig.kt`.
 
 ---
 

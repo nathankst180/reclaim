@@ -5,6 +5,7 @@
 /build
 /app/build
 /captures
+/dist
 .externalNativeBuild
 .cxx
 local.properties
