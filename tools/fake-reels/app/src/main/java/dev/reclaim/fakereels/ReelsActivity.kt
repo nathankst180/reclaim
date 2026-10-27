@@ -29,28 +29,35 @@ class ReelsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(
-            when (intent.getStringExtra("mode")) {
-                "recycler" -> snappingList(R.id.clips_viewer_view_pager)
-                "shorts" -> snappingList(R.id.reel_recycler)
-                "hint" -> snappingList(R.id.reel_watch_pager)
-                "feed" -> RecyclerView(this).apply {
-                    id = R.id.feed_list
-                    layoutManager = LinearLayoutManager(context)
-                    adapter = PageAdapter(fullScreen = false)
-                }
-                "carousel" -> ViewPager2(this).apply {
-                    id = R.id.clips_viewer_view_pager
-                    orientation = ViewPager2.ORIENTATION_HORIZONTAL
-                    adapter = PageAdapter(fullScreen = true)
-                }
-                else -> ViewPager2(this).apply {
-                    id = R.id.clips_viewer_view_pager
-                    orientation = ViewPager2.ORIENTATION_VERTICAL
-                    adapter = PageAdapter(fullScreen = true)
-                }
-            },
-        )
+        setContentView(buildContent())
+    }
+
+    /** Starting this screen again while it is on top swaps in a brand new pager, without the old one ever closing. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        setContentView(buildContent())
+    }
+
+    private fun buildContent() = when (intent.getStringExtra("mode")) {
+        "recycler" -> snappingList(R.id.clips_viewer_view_pager)
+        "shorts" -> snappingList(R.id.reel_recycler)
+        "hint" -> snappingList(R.id.reel_watch_pager)
+        "feed" -> RecyclerView(this).apply {
+            id = R.id.feed_list
+            layoutManager = LinearLayoutManager(context)
+            adapter = PageAdapter(fullScreen = false)
+        }
+        "carousel" -> ViewPager2(this).apply {
+            id = R.id.clips_viewer_view_pager
+            orientation = ViewPager2.ORIENTATION_HORIZONTAL
+            adapter = PageAdapter(fullScreen = true)
+        }
+        else -> ViewPager2(this).apply {
+            id = R.id.clips_viewer_view_pager
+            orientation = ViewPager2.ORIENTATION_VERTICAL
+            adapter = PageAdapter(fullScreen = true)
+        }
     }
 
     private fun snappingList(viewId: Int) = RecyclerView(this).apply {
