@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- No typeWindowContentChanged: those events fire dozens of times a second while a video plays,
+     and answering them makes Instagram and YouTube do extra work. Taps are rare, so typeViewClicked is cheap:
+     it is how Reclaim notices that you just opened a reel. flagRetrieveInteractiveWindows lets it look at
+     every window of the app, so a comments sheet on top of the player is not mistaken for leaving it.
+     flagIncludeNotImportantViews: YouTube's Shorts player may mark its pager as "not important for accessibility",
+     which hides it from the view tree and silences its scroll events unless this flag is set. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeViewClicked"
     android:packageNames="com.instagram.android,com.google.android.youtube"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="50"
     android:description="@string/accessibility_description" />

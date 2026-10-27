@@ -17,8 +17,8 @@
 | Platform | Android only, native |
 | Language / UI | Kotlin + Jetpack Compose + Material 3 |
 | Theme | **Dark only** for v1 (the "A+B Mix · Dark" design, section 7) |
-| What counts as +1 | Each time the player moves to a **different** reel or short |
-| Swipe back up to an old reel | **Counts** (setting `countBackward = true`, can be switched off) |
+| What counts as +1 | **Opening** a reel or short (from search, a profile, a message, or the Reels tab), and then each reel further along than any already counted in this visit |
+| Swipe back up to an old reel | **Does not count.** Each reel counts once, even if you go back and forth (decided after a day of real use). `countBackward` is off by default; switching it on counts every move |
 | Half-swipe that bounces back | **0** |
 | Corner counter | Today's total (Reels + Shorts), "glass pill" style, top-right |
 | Daily limit | Default 300, gentle notification once a day, **no blocking** |
@@ -40,8 +40,8 @@
 - **Android Gradle Plugin**: latest stable
 - **Jetpack Compose**: latest Compose BOM, Material 3
 - **Navigation Compose**: 3 routes (onboarding, home, settings) + debug route
-- **Room** with KSP (not kapt) for daily stats
-- **DataStore Preferences** for settings
+- **Plain SQLite** (`SQLiteOpenHelper`) for daily stats. Room was dropped for v1: no extra library or KSP step, and the APK stays smaller. Keeping the last 21 days in memory makes the screen and the corner number live.
+- **SharedPreferences** for settings (no extra library)
 - **Kotlin Coroutines + Flow**
 - **Lifecycle ViewModel Compose**
 - **JUnit 4 + kotlinx-coroutines-test** for unit tests
@@ -110,7 +110,7 @@ Rules:
 ### 4.1 Config — `res/xml/accessibility_config.xml`
 ```xml
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged"
     android:packageNames="com.instagram.android,com.google.android.youtube"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds"
@@ -119,6 +119,7 @@ Rules:
     android:description="@string/accessibility_description" />
 ```
 - `packageNames` limits events to these 2 apps → almost no battery use.
+- **No `typeWindowContentChanged`.** It fires many times a second while a video plays, and reading the source of each event makes Instagram and YouTube do extra work. The first build did this and scrolling felt slow.
 - `canRetrieveWindowContent` is needed **only** to read view IDs (resource names) to know we are in the Reels/Shorts player.
 - **Never read or store text, captions, usernames, comments or any content.** Never call `.text` or `.contentDescription` on nodes, except inside the debug inspector, and even there do not log them.
 
@@ -161,7 +162,14 @@ object CountingConfig {
     const val PLAYER_CHECK_THROTTLE_MS = 500L
 }
 ```
-- Check on every `TYPE_WINDOW_STATE_CHANGED`, and on `TYPE_WINDOW_CONTENT_CHANGED` at most once per 500 ms.
+- Check on every `TYPE_WINDOW_STATE_CHANGED` (search the window for the player IDs). A scroll event only counts if its source view ID is a player ID, and that answer is reused for one gesture (400 ms), so the other app is asked once per swipe, not once per event. Events from the feed or a comments list have a different source and are ignored.
+- Leaving the app gives us no event (we only listen to these 2 apps), and Android gives us no window at all while another app is in front. So while in the player we check once a second, and 2 misses in a row mean we left (dated to the last time the app was in front). The first build treated "no window" as "unknown" and kept the corner number on screen over other apps.
+- The scrolled view is often a RecyclerView inside the pager, and only the pager has the ID. So the view and its first 3 parents are checked, and any ID containing a known hint (`clips_viewer` for Instagram, `reel_recycler` / `reel_player_page` for YouTube) counts too. Do not add "reel" for Instagram: it calls Stories "reel".
+- **Opening a reel counts +1.** A tap (`typeViewClicked`) or a screen change starts looking for the player: after 0.5 s, then once a second for 10 s, searching every window of the app (`flagRetrieveInteractiveWindows`). If the player is found and we were not in it, that is an entry (+1). If it disappears for 2 checks while the app is in front, the player was closed, and opening another reel afterwards always counts, even within 3 s.
+- **Each reel counts once.** The counter remembers the furthest position reached in this visit; a move counts only if it goes past that. A different position right after coming back means the app reloaded its list, so the mark restarts.
+- **Learned IDs.** The first time a scroll is recognised as the player, its real view ID is saved (`LearnedPlayerIds`) and added to the search above. YouTube also matches any ID containing `reel_` or `shorts_`, and `flagIncludeNotImportantViews` is on in case the Shorts pager is hidden from accessibility.
+- A sideways scroll, or a list showing more than 2 items at once (comments), is never the pager.
+- **Report:** if Home still shows 0 after watching, "Copy a report" lists the views that scrolled and whether they were recognised (view names and screen class names only, never text). This is how the real IDs get confirmed without adb.
 - Use `rootInActiveWindow?.findAccessibilityNodeInfosByViewId(id)`; the player is "visible" if any matching node `isVisibleToUser`.
 - Also accept a `TYPE_VIEW_SCROLLED` event whose **source view ID** is one of the player IDs as proof we are in the player (cheap, no tree search).
 - Recycle nodes on API < 33.
@@ -355,6 +363,8 @@ The phases below are still done in order. Stop and wait for me only here:
 - **Stop 2:** after Phase 4 (counter + unit tests + accuracy test passing).
 - **Stop 3:** after Phase 9 (everything else, release check).
 
+**Status (v0.5.0):** the counter, storage, time spent (per app and per day), distance, corner counter, Home screen with tappable days and week browsing, and Settings are built, with 60 unit tests passing. **Confirmed on the phone after a day of use:** Instagram Reels counting and the corner number. **Fixed since:** opening a reel now counts, and going back no longer counts. **Not confirmed:** YouTube Shorts (it counted nothing on the phone; this version is much more tolerant and the report will show what it sees). **Not done yet:** onboarding (7.3), the daily limit notification (6.6), the final app icon. Part of the lag after each update is Android not having optimised the new install yet (cold start went from 6.1 s to 3.6 s on the emulator once forced), so batch changes instead of updating often.
+
 **Phase 1 — Setup**
 New project, version catalog, dark theme + fonts, empty Home with the header. `./gradlew assembleDebug` works. → *I install it and see the app open.*
 
@@ -408,12 +418,23 @@ Write down the results like: `IG test 3: expected 20, got 19` and send them with
 
 ---
 
+## 10b. Emulator test rig (no phone needed)
+`tools/fake-reels` is a tiny emulator-only app that pretends to be the Reels player (package `com.instagram.android`, a vertical pager with the player ID, or a plain feed that must never count). Never install it on a phone that has the real Instagram.
+1. `./gradlew -p tools/fake-reels assembleDebug`, then `adb install` it, install Reclaim, and switch Reclaim on in Accessibility.
+2. `adb shell am start -n com.instagram.android/dev.reclaim.fakereels.ReelsActivity --es mode pager2` (or `recycler`, or `feed`).
+3. `adb shell input swipe 540 2100 540 500 400` once every ~3 s. The count must equal the "Reel N" shown. `feed` must stay 0. Home, the corner number and leaving to the home screen can be checked the same way.
+
+The real YouTube on the emulator is too old to run (it demands an update that needs a Google sign-in), so YouTube is only tested on a phone.
+
+---
+
 ## 11. Install & test on the phone
 1. Phone: Settings → About phone → tap **Build number** 7 times → Developer options → turn on **USB debugging**.
 2. `./gradlew installDebug` (phone connected), or copy `app/build/outputs/apk/debug/app-debug.apk` to the phone and open it.
 3. **Android 13+:** Settings → Apps → Reclaim → ⋮ (top right) → **Allow restricted settings**. Then Settings → Accessibility → Reclaim → ON.
 4. Xiaomi / Vivo / Oppo / Realme: Battery → Reclaim → **No restrictions**, and lock Reclaim in recent apps.
 5. Logs: `adb logcat -s ReclaimDbg`
+6. **Test with the inspect build**: `./gradlew assembleInspect` → `app/build/outputs/apk/inspect/app-inspect.apk`. It is as fast as release and has the debug screen (long-press Today) with the test counter. The plain debug build is slow; use it only while developing.
 
 ---
 
@@ -421,6 +442,8 @@ Write down the results like: `IG test 3: expected 20, got 19` and send them with
 - Send the **release** APK (`dist/Reclaim-<versionName>.apk`), not the debug one. It is small, and it has no debug inspector. A friend gets something useful only once counting works (after Stop 2).
 - It is signed with the debug key for now. That installs fine on any phone, but a later Play Store build must use a real key, and a friend would have to uninstall first.
 - If WhatsApp refuses a `.apk`, send it zipped, or share a Google Drive link.
+- Play Protect can refuse the install with a bare "App not installed" (seen on a OnePlus in India, because Reclaim is an accessibility app). Fix: Play Store → profile picture → Play Protect → ⚙ → turn off **Scan apps with Play Protect**, install, and turn it back on once testing is done. A friend may hit the same thing. Publishing on the Play Store later avoids it.
+- After installing, turning the service on shows "App was denied access". That is Android's restricted-settings rule: Settings → Apps → Reclaim → ⋮ (top right) → **Allow restricted settings**, then turn Reclaim on under Accessibility.
 - Friend's phone: tap the file → allow "Install unknown apps" for WhatsApp or Files → install. On Android 13+: Settings → Apps → Reclaim → ⋮ → **Allow restricted settings**, then Settings → Accessibility → Reclaim → ON. On Xiaomi / Vivo / Oppo / Realme set battery to "No restrictions".
 - Their Instagram or YouTube version may use different view IDs, so counts can be off on their phone. If so, they tell me their phone model and app versions, and I add the IDs to `CountingConfig.kt`.
 
@@ -443,3 +466,4 @@ Write down the results like: `IG test 3: expected 20, got 19` and send them with
 - Light theme, Play Store (Accessibility API declaration form, demo video, privacy policy page, AAB with a real signing key)
 - More apps (Facebook Reels, Snapchat Spotlight, Moj, Josh) by adding IDs to `CountingConfig.kt`
 - Weekly summary card, home-screen widget
+- Browser support (YouTube Shorts and Instagram Reels watched in Chrome or another browser). There are no player view IDs in a web page, so it would have to read the page address, which is text. That needs its own privacy review, an opt-in switch and testing on a real phone. Not in v1: watching in a browser is not counted.

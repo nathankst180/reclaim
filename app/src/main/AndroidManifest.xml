@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Only so the report can say which Instagram and YouTube versions are installed. -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
     <application
         android:name=".ReclaimApp"
         android:allowBackup="false"

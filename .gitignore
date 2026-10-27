@@ -6,6 +6,8 @@
 /app/build
 /captures
 /dist
+/tools/fake-reels/build
+/tools/fake-reels/app/build
 .externalNativeBuild
 .cxx
 local.properties

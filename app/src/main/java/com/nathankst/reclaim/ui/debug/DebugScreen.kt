@@ -1,5 +1,8 @@
 package com.nathankst.reclaim.ui.debug
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,26 +19,36 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nathankst.reclaim.counting.ReelCounter
 import com.nathankst.reclaim.service.DebugInspector
 import com.nathankst.reclaim.ui.theme.ReclaimColors
 import com.nathankst.reclaim.ui.theme.ReclaimText
 
-/** Debug builds only. Reached by long-pressing the title on Home. */
+/** Inspector builds only. Reached by long-pressing the title on Home. */
 @Composable
-fun DebugScreen(isTracking: Boolean, onBack: () -> Unit) {
+fun DebugScreen(isTracking: Boolean, counter: ReelCounter, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val result by counter.result.collectAsStateWithLifecycle()
     val logEnabled by DebugInspector.logEnabled.collectAsStateWithLifecycle()
     val dumpPending by DebugInspector.dumpPending.collectAsStateWithLifecycle()
     val lastDump by DebugInspector.lastDump.collectAsStateWithLifecycle()
+    val buffered by DebugInspector.bufferedCount.collectAsStateWithLifecycle()
+    var copyStatus by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -62,6 +75,25 @@ fun DebugScreen(isTracking: Boolean, onBack: () -> Unit) {
                     .clickable(onClick = onBack)
                     .padding(8.dp),
             )
+        }
+
+        DebugCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("TEST COUNTER", style = ReclaimText.Overline, color = ReclaimColors.Muted)
+                Text(result.total.toString(), style = ReclaimText.BigNumber, color = ReclaimColors.Mint)
+                Text(
+                    text = "Instagram ${result.instagram} · YouTube ${result.youtube} · " +
+                        (if (result.inPlayer) "in player" else "not in player"),
+                    style = ReclaimText.Label,
+                    color = ReclaimColors.Muted,
+                )
+                OutlinedButton(
+                    onClick = counter::resetCounts,
+                    border = BorderStroke(1.dp, ReclaimColors.Line),
+                ) {
+                    Text("Reset", style = ReclaimText.Label, color = ReclaimColors.Mint)
+                }
+            }
         }
 
         DebugCard {
@@ -109,9 +141,9 @@ fun DebugScreen(isTracking: Boolean, onBack: () -> Unit) {
                 Text("Dump view IDs", style = ReclaimText.Body, color = ReclaimColors.Text)
                 Text(
                     text = when {
-                        dumpPending -> "Waiting. Open Instagram Reels or YouTube Shorts now."
+                        dumpPending -> "Waiting. Open Reels or Shorts now. The dump is taken 10 seconds after you tapped."
                         lastDump != null -> "Done: $lastDump"
-                        else -> "Tap, then open Reels or Shorts. IDs only go to Logcat."
+                        else -> "Tap, then open Reels or Shorts within 10 seconds. IDs only, no text."
                     },
                     style = ReclaimText.Label,
                     color = ReclaimColors.Muted,
@@ -127,7 +159,55 @@ fun DebugScreen(isTracking: Boolean, onBack: () -> Unit) {
                 }
             }
         }
+
+        DebugCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Copy for pasting", style = ReclaimText.Body, color = ReclaimColors.Text)
+                Text(
+                    text = "$buffered events captured. ${copyStatus ?: "Copy, then paste into the chat."}",
+                    style = ReclaimText.Label,
+                    color = ReclaimColors.Muted,
+                )
+                Button(
+                    onClick = {
+                        copyToClipboard(context, DebugInspector.eventsText())
+                        copyStatus = "Copied $buffered events."
+                    },
+                    enabled = buffered > 0,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReclaimColors.Mint,
+                        contentColor = ReclaimColors.Background,
+                    ),
+                ) {
+                    Text("Copy events", style = ReclaimText.Label)
+                }
+                OutlinedButton(
+                    onClick = {
+                        copyToClipboard(context, DebugInspector.dumpText().orEmpty())
+                        copyStatus = "Copied the view ID dump."
+                    },
+                    enabled = lastDump != null,
+                    border = BorderStroke(1.dp, ReclaimColors.Line),
+                ) {
+                    Text("Copy view ID dump", style = ReclaimText.Label, color = ReclaimColors.Mint)
+                }
+                OutlinedButton(
+                    onClick = {
+                        DebugInspector.clearCaptured()
+                        copyStatus = "Cleared."
+                    },
+                    border = BorderStroke(1.dp, ReclaimColors.Line),
+                ) {
+                    Text("Clear captured", style = ReclaimText.Label, color = ReclaimColors.Muted)
+                }
+            }
+        }
     }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java)
+    clipboard.setPrimaryClip(ClipData.newPlainText("Reclaim debug", text))
 }
 
 @Composable

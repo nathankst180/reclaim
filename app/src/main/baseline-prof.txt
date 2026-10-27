@@ -1,0 +1,4 @@
+# Tells Android which of Reclaim's code to optimise ahead of time, so the app starts and draws faster
+# after an install or update. Compose and AndroidX bring their own profiles, which are merged in.
+HSPLcom/nathankst/reclaim/**;->**(**)**
+Lcom/nathankst/reclaim/**;

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Debug builds only: adb shell am broadcast -a com.nathankst.reclaim.SEED_SAMPLE_HISTORY -p com.nathankst.reclaim -->
+        <receiver
+            android:name=".debug.SeedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.nathankst.reclaim.SEED_SAMPLE_HISTORY" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

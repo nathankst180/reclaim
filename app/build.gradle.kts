@@ -11,8 +11,8 @@ android {
         applicationId = "com.nathankst.reclaim"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 6
+        versionName = "0.5.0"
     }
 
     androidResources {
@@ -20,11 +20,22 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "INSPECTOR", "true")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug") // only for personal testing
+            buildConfigField("boolean", "INSPECTOR", "false")
+        }
+        // Same speed as release, but with the debug screen and test counter. Use this to test accuracy.
+        create("inspect") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            versionNameSuffix = "-inspect"
+            buildConfigField("boolean", "INSPECTOR", "true")
         }
     }
     compileOptions {
@@ -54,6 +65,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.foundation)
